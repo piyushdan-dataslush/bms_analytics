@@ -1,0 +1,6 @@
+curl-cffi
+pandas
+playwright
+opencv-python-headless
+numpy
+webdriver-manager
