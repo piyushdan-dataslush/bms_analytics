@@ -10,10 +10,31 @@ from modules import scraper, parser, layout, analyzer
 
 # --- Configuration for Cities (Extend as needed) ---
 CITY_CONFIG = {
-    "AHMEDABAD": {"code": "AHD", "lat": "23.039568", "lon": "72.566005"},
-    "MUMBAI": {"code": "MUM", "lat": "19.0760", "lon": "72.8777"},
-    "BANGALORE": {"code": "BANG", "lat": "12.9716", "lon": "77.5946"},
-    "NCR": {"code": "NCR", "lat": "28.6139", "lon": "77.2090"}
+    "AHMEDABAD": {
+        "code": "AHD", 
+        "lat": "23.039568", 
+        "lon": "72.566005"
+    },
+    "MUMBAI": {
+        "code": "MUMBAI", 
+        "lat": "19.0760", 
+        "lon": "72.8777"
+    },
+    "VADODARA": {
+        "code": "VAD", 
+        "lat": "22.3072", 
+        "lon": "73.1812"
+    },
+    "SURAT": {
+        "code": "SURT", 
+        "lat": "21.1702", 
+        "lon": "72.8311"
+    },
+    "RAJKOT": {
+        "code": "RAJK", 
+        "lat": "22.3039", 
+        "lon": "70.8022"
+    }
 }
 
 def main():
