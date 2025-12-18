@@ -1,14 +1,12 @@
 import os
-import argparse
-import time
-from datetime import datetime
-import json
 import pandas as pd
+import argparse
+import json
+import tempfile
+from datetime import datetime
+from modules import scraper, parser, layout, analyzer, bq_client
 
-# Import our custom modules
-from modules import scraper, parser, layout, analyzer
-
-# --- Configuration for Cities (Extend as needed) ---
+# --- Configuration ---
 CITY_CONFIG = {
     "AHMEDABAD": {
         "code": "AHD", 
@@ -37,35 +35,51 @@ CITY_CONFIG = {
     }
 }
 
+BATCH_FILE = "current_batch_data.csv"
+
+FINAL_COLUMN_ORDER = [
+    "EventId", 
+    "VenueCode", 
+    "VenueName", 
+    "SessionId", 
+    "ShowDate", 
+    "ShowTime", 
+    "ShowDateTime", 
+    "ScrapeTriggerTime", 
+    "TicketLink", 
+    "Status", 
+    "total_seats", 
+    "filled_sold", 
+    "available", 
+    "bestseller", 
+    "total_unsold", 
+    "MovieName",
+    "City"
+]
+
 def main():
     # 1. Parse Arguments
     arg_parser = argparse.ArgumentParser(description="BookMyShow Analytics Pipeline")
-    arg_parser.add_argument("--city", type=str, required=True, help="City Name (e.g., Ahmedabad)")
-    arg_parser.add_argument("--event", type=str, required=True, help="Event ID (e.g., ET00452447)")
-    arg_parser.add_argument("--date", type=str, default="", help="Date YYYYMMDD (Optional, defaults to today/API default)")
-    arg_parser.add_argument("--limit", type=int, default=5, help="Number of shows to process (to avoid overloading)")
+    arg_parser.add_argument("--city", type=str, required=True, help="City Name")
+    arg_parser.add_argument("--event", type=str, required=True, help="Event ID")
+    arg_parser.add_argument("--date", type=str, default="", help="Date YYYYMMDD")
+    arg_parser.add_argument("--limit", type=int, default=5, help="Number of shows to process")
     
     args = arg_parser.parse_args()
     
     city_key = args.city.upper()
     if city_key not in CITY_CONFIG:
-        print(f"Error: City '{args.city}' not configured in CITY_CONFIG.")
+        print(f"Error: City '{args.city}' not configured.")
         return
 
     city_data = CITY_CONFIG[city_key]
     
-    # 2. Setup Output Directories
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_output_dir = os.path.join("output", f"{args.event}_{timestamp}")
-    images_dir = os.path.join(base_output_dir, "images")
-    processed_dir = os.path.join(base_output_dir, "processed")
-    
-    os.makedirs(images_dir, exist_ok=True)
-    os.makedirs(processed_dir, exist_ok=True)
+    # Initialize BigQuery Client
+    bq = bq_client.BigQueryHandler()
 
     print(f"--- Starting Pipeline for {city_key} | Event: {args.event} ---")
 
-    # 3. Scrape Schedule (Script 1)
+    # 2. Scrape Schedule
     schedule_json = scraper.fetch_schedule(
         event_code=args.event,
         region_code=city_data['code'],
@@ -75,67 +89,84 @@ def main():
     )
     
     if not schedule_json:
-        print("Failed to fetch schedule. Exiting.")
+        print("Failed to fetch schedule.")
         return
 
-    # Save raw JSON for debugging
-    with open(os.path.join(base_output_dir, "raw_schedule.json"), "w") as f:
-        json.dump(schedule_json, f, indent=4)
-
-    # 4. Parse to CSV (Script 2)
-    df = parser.parse_schedule_to_df(schedule_json, args.event)
+    # 3. Parse to DataFrame
+    df = parser.parse_schedule_to_df(schedule_json, args.event, city_data['code'])
     
     if df.empty:
         print("No shows found in schedule.")
         return
         
-    csv_path = os.path.join(base_output_dir, "schedule.csv")
-    df.to_csv(csv_path, index=False)
-    print(f"Schedule CSV saved to: {csv_path}")
+    print(f"Found {len(df)} shows. Processing first {args.limit}...")
+    batch_data = []
+    print("Done!")
 
-    # 5. Process Sessions (Script 3 & 4)
-    final_report = []
-    
-    print(f"Processing first {args.limit} sessions...")
-    
-    # Loop through the dataframe
+    # 4. Process Sessions
     for index, row in df.head(args.limit).iterrows():
-        session_id = row['SessionId']
-        venue_code = row['VenueCode']
-        ticket_link = row['TicketLink']
+        print(f"\nProcessing: {row['VenueName']} @ {row['ShowTime']}")
         
-        print(f"\nProcessing {index+1}/{args.limit}: {row['VenueName']} @ {row['ShowTime']}")
-        
-        # File paths for this specific session
-        raw_img_name = f"{venue_code}_{session_id}_raw.png"
-        proc_img_name = f"{venue_code}_{session_id}_proc.png"
-        raw_img_path = os.path.join(images_dir, raw_img_name)
-        proc_img_path = os.path.join(processed_dir, proc_img_name)
+        # Create a temporary file path for the screenshot
+        # We delete this later to save space
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            temp_img_path = tmp_file.name
 
-        # A. Capture Layout
-        success = layout.capture_seat_layout(ticket_link, raw_img_path)
-        
-        if success:
-            # B. Analyze Image
-            stats = analyzer.analyze_seats(raw_img_path, proc_img_path)
+        try:
+            # A. Capture Screenshot to temp path
+            success = layout.capture_seat_layout(row['TicketLink'], temp_img_path)
             
-            if stats:
-                # Merge row data with stats
-                session_result = row.to_dict()
-                session_result.update(stats)
-                final_report.append(session_result)
-        else:
-            print("Skipping analysis due to capture failure.")
+            if success:
+                # B. Analyze (Get stats only)
+                stats = analyzer.analyze_seats(temp_img_path)
+                
+                if stats:
+                    # C. Merge Data for BigQuery
+                    bq_row = row.to_dict()
+                    bq_row.update(stats)
+                    
+                    # Add Metadata
+                    # bq_row['ScrapedAt'] = datetime.now().isoformat()
+                    bq_row['City'] = city_key
+                    bq_row['Status'] = 'COMPLETED'
 
-    # 6. Save Final Report
-    report_path = os.path.join(base_output_dir, "final_occupancy_report.json")
-    with open(report_path, "w") as f:
-        json.dump(final_report, f, indent=4)
+                    # D. Push to BigQuery
+                    # bq.stream_data(bq_row)
+                    batch_data.append(bq_row)
+                    
+                    # Console Log
+                    print(f"   Movie: {bq_row['MovieName']} | Occupancy: {stats['filled_sold']}/{stats['total_seats']}")
+            else:
+                print("   Skipping analysis due to capture failure.")
 
-    print("\n" + "="*40)
-    print(f"Pipeline Complete. Output folder: {base_output_dir}")
-    print(f"Final Report: {report_path}")
-    print("="*40)
+        except Exception as e:
+            print(f"   Error: {e}")
+
+        finally:
+            # E. Cleanup: Delete the temp image
+            if os.path.exists(temp_img_path):
+                os.remove(temp_img_path)
+
+    # --- 3. BULK UPLOAD TO BIGQUERY ---
+    if batch_data:
+        print("\n--- Uploading Batch to BigQuery ---")
+        
+        # Convert list of dicts to DataFrame
+        batch_df = pd.DataFrame(batch_data)
+        batch_df = batch_df.reindex(columns=FINAL_COLUMN_ORDER)
+        
+        # Save to CSV locally first (Handling the file creation)
+        batch_df.to_csv(BATCH_FILE, index=False)
+        
+        # Upload the CSV
+        bq.load_csv(BATCH_FILE)
+        
+        # Clean up local CSV
+        if os.path.exists(BATCH_FILE):
+            os.remove(BATCH_FILE)
+            print("Local batch file cleaned up.")
+    else:
+        print("\nNo data collected to upload.")
 
 if __name__ == "__main__":
     main()

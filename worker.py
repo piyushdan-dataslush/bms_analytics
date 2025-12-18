@@ -2,10 +2,12 @@ import pandas as pd
 import os
 import time
 from datetime import datetime
-from modules import layout, analyzer
+from modules import layout, analyzer, bq_client  
 
 QUEUE_FILE = "master_queue.csv"
 OUTPUT_BASE = "output_data"
+
+bq_handler = bq_client.BigQueryHandler()
 
 def process_tasks():
     if not os.path.exists(QUEUE_FILE):
@@ -64,6 +66,10 @@ def process_tasks():
                         full_data['ScrapeTriggerTime'] = str(full_data['ScrapeTriggerTime'])
                         full_data.update(stats)
                         json.dump(full_data, f, indent=4)
+                
+                    # Stream to BigQuery
+                    full_data['ScrapedAt'] = datetime.now().isoformat()
+                    bq_handler.stream_data(full_data)
                 
                 # 5. Update Status in DataFrame
                 df.at[index, 'Status'] = 'COMPLETED'

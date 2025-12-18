@@ -4,3 +4,4 @@ playwright
 opencv-python-headless
 numpy
 webdriver-manager
+google-cloud-bigquery

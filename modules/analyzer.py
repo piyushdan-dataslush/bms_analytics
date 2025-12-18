@@ -3,7 +3,7 @@ import numpy as np
 import json
 import os
 
-def analyze_seats(image_path, processed_image_output_path):
+def analyze_seats(image_path):
     """
     Analyzes seat occupancy from the screenshot.
     Returns a dictionary of stats.
@@ -63,7 +63,7 @@ def analyze_seats(image_path, processed_image_output_path):
                 cv2.rectangle(output_img, (x, y), (x+w, y+h), (0, 0, 255), 2) # Red box
 
     # Save processed visual
-    cv2.imwrite(processed_image_output_path, output_img)
+    # cv2.imwrite(processed_image_output_path, output_img)
 
     return {
         "total_seats": total_seats,
@@ -71,5 +71,5 @@ def analyze_seats(image_path, processed_image_output_path):
         "available": unsold_available,
         "bestseller": unsold_bestseller,
         "total_unsold": unsold_available + unsold_bestseller,
-        "processed_image_path": processed_image_output_path
+        # "processed_image_path": processed_image_output_path
     }
