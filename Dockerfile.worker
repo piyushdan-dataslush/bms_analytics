@@ -1,0 +1,26 @@
+# Use the official Microsoft Playwright image (Includes Python & Browsers)
+# This prevents "Browser not found" and "Missing libraries" errors
+FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+
+# 1. Install System Dependencies for OpenCV
+# Even the official image needs this specific library for cv2 to work
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Setup App Directory
+WORKDIR /app
+
+# 3. Install Python Dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN playwright install chromium
+
+# 4. Copy Application Code
+COPY . .
+
+# 5. Run the Application
+# Using list format ["..."] is safer for passing signals in Cloud Run
+CMD ["uvicorn", "app_worker:app", "--host", "0.0.0.0", "--port", "8080"]

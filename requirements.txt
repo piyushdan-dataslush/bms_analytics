@@ -1,7 +1,12 @@
+fastapi
+uvicorn
 curl-cffi
 pandas
 playwright
 opencv-python-headless
 numpy
-webdriver-manager
 google-cloud-bigquery
+google-cloud-tasks
+pydantic
+python-dotenv
+pytz

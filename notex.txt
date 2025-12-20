@@ -1,0 +1,5 @@
+# 1. Deploy Worker
+gcloud run deploy bms-worker --source . --file Dockerfile.worker --region us-central1 --memory 2Gi --allow-unauthenticated
+
+# 2. Deploy Scheduler (Pass the Worker URL you just got as an Env Var)
+gcloud run deploy bms-scheduler --source . --file Dockerfile.scheduler --region us-central1 --memory 1Gi --allow-unauthenticated --set-env-vars WORKER_URL="https://bms-worker-....run.app/scrape_session"

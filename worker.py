@@ -68,7 +68,7 @@ def process_tasks():
                         json.dump(full_data, f, indent=4)
                 
                     # Stream to BigQuery
-                    full_data['ScrapedAt'] = datetime.now().isoformat()
+                    # full_data['ScrapedAt'] = datetime.now().isoformat()
                     bq_handler.stream_data(full_data)
                 
                 # 5. Update Status in DataFrame

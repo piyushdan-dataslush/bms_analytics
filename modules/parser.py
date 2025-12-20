@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime, timedelta
+import pytz
 
 def parse_schedule_to_df(json_data, event_code, region_code):
     """
@@ -19,6 +20,10 @@ def parse_schedule_to_df(json_data, event_code, region_code):
     except:
         movie_name = 'Unknown Movie'
 
+    # Define Timezones
+    ist_zone = pytz.timezone('Asia/Kolkata')
+    utc_zone = pytz.utc
+
     widgets = json_data.get('data', {}).get('showtimeWidgets', [])
 
     for widget in widgets:
@@ -34,7 +39,6 @@ def parse_schedule_to_df(json_data, event_code, region_code):
                             
                             for show in venue.get('showtimes', []):
                                 show_data = show.get('additionalData', {})
-                                
                                 session_id = show_data.get('sessionId')
                                 
                                 # Force string conversion and strip
@@ -46,12 +50,18 @@ def parse_schedule_to_df(json_data, event_code, region_code):
                                     continue
                                 
                                 try:
-                                    # Calculate DateTimes
-                                    full_time_str = f"{show_date_code} {show_time_code}"
-                                    show_datetime = datetime.strptime(full_time_str, "%Y%m%d %H%M")
+                                    # 1. Parse as Naive Time (e.g. 18:45)
+                                    naive_dt = datetime.strptime(f"{show_date_code} {show_time_code}", "%Y%m%d %H%M")
                                     
-                                    # Calculate Trigger (30 mins before)
-                                    trigger_datetime = show_datetime - timedelta(minutes=30)
+                                    # 2. Localize to IST (It is now 6:45 PM India Time)
+                                    ist_dt = ist_zone.localize(naive_dt)
+                                    
+                                    # 3. Calculate Trigger (15 mins before)
+                                    trigger_ist = ist_dt - timedelta(minutes=15)
+                                    
+                                    # 4. Convert Trigger to UTC (This is what Cloud Tasks needs)
+                                    # Example: 6:30 PM IST becomes 1:00 PM UTC
+                                    trigger_utc = trigger_ist.astimezone(utc_zone)
                                     
                                     # Ticket Link
                                     ticket_link = f"https://in.bookmyshow.com/movies/{region_code.lower()}/seat-layout/{event_code}/{venue_code}/{session_id}/{show_date_code}"
@@ -64,8 +74,9 @@ def parse_schedule_to_df(json_data, event_code, region_code):
                                         'SessionId': int(session_id) if session_id else 0, # Ensure Int for BQ
                                         'ShowDate': show_date_code,
                                         'ShowTime': show_time_display,
-                                        'ShowDateTime': show_datetime,
-                                        'ScrapeTriggerTime': trigger_datetime,
+                                        'ShowDateTime': str(ist_dt),
+                                        'ScrapeTriggerTime': str(trigger_ist),
+                                        'Trigger_Object_UTC': trigger_utc,
                                         'TicketLink': ticket_link,
                                         'Status': 'PENDING'
                                     }
