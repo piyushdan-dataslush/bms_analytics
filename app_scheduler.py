@@ -1,6 +1,7 @@
 import os, json
 from datetime import datetime, timedelta
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google.cloud import tasks_v2
 import google.auth
@@ -10,13 +11,34 @@ import pytz
 
 app = FastAPI()
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace "*" with your actual frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # --- CONFIG ---
-PROJECT_ID = os.environ.get("PROJECT_ID", "tenacious-camp-357012")
-LOCATION = "asia-south1"
-QUEUE_ID = "bms-queue"
-WORKER_URL = os.environ.get("WORKER_URL", "https://your-worker-url.run.app/scrape_session")
-SCHEDULER_URL = os.environ.get("SCHEDULER_URL", "https://your-scheduler-url.run.app/process_day")
-SERVICE_ACCOUNT_EMAIL = "660956715067-compute@developer.gserviceaccount.com"
+# Required environment variables
+PROJECT_ID = os.environ["PROJECT_ID"]  # GCP Project ID
+LOCATION = os.environ.get("TASK_QUEUE_LOCATION", "asia-south1")
+QUEUE_ID = os.environ.get("TASK_QUEUE_ID", "bms-queue")
+WORKER_URL = os.environ["WORKER_URL"]  # e.g., https://bms-worker-xxxx.a.run.app/scrape_session
+SERVICE_ACCOUNT_EMAIL = os.environ.get(
+    "SERVICE_ACCOUNT_EMAIL",
+    f"{PROJECT_ID}@appspot.gserviceaccount.com"  # Default App Engine service account
+)
+
+# Validate required environment variables
+required_vars = ["PROJECT_ID", "WORKER_URL"]
+for var in required_vars:
+    if not os.environ.get(var):
+        raise ValueError(f"Missing required environment variable: {var}")
+
+# For Cloud Scheduler self-triggering (if needed)
+SCHEDULER_URL = os.environ.get("SCHEDULER_URL")  # Optional: Only needed for self-triggering
 
 CITY_CONFIG = {
     "AHMEDABAD": {"code": "AHD", "slug": "ahd", "lat": "23.039568", "lon": "72.566005"},

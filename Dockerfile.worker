@@ -5,7 +5,7 @@ FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
 # 1. Install System Dependencies for OpenCV
 # Even the official image needs this specific library for cv2 to work
 RUN apt-get update && apt-get install -y \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 

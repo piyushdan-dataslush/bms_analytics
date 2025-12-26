@@ -3,6 +3,7 @@ import pandas as pd
 import argparse
 import json
 import tempfile
+import asyncio
 from datetime import datetime
 from modules import scraper, parser, layout, analyzer, bq_client
 
@@ -114,7 +115,7 @@ def main():
 
         try:
             # A. Capture Screenshot to temp path
-            success = layout.capture_seat_layout(row['TicketLink'], temp_img_path)
+            success = asyncio.run(layout.capture_seat_layout(row['TicketLink'], temp_img_path))
             
             if success:
                 # B. Analyze (Get stats only)
