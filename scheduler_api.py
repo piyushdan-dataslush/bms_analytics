@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="BMS Scheduler Service")
 
 PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-QUEUE_LOCATION = "us-central1"
+QUEUE_LOCATION = "asia-south1"
 QUEUE_NAME = "bhm-scraping-queue"
 WORKER_URL = os.getenv("WORKER_URL", f"https://bms-worker-{PROJECT_ID}.run.app")
 
